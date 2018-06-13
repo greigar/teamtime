@@ -6,6 +6,8 @@ path     <- "~/Downloads/"
 filename <- dir(path, pattern = "timesheet")[1]
 filename <- paste0(path, filename)
 
+fields_default <- c("Week_start", "User", "Project.Code")
+
 read_ts <- function() {
   ts_data            <- read_csv(filename)
   names(ts_data)     <- make.names(names(ts_data))
@@ -37,27 +39,31 @@ tss <- function(fields, folks, projects, start_date, end_date) {
                    summarise(Total_hours = sum(Time)) %>%
                    arrange_(fields)
 
-  if (length(folks) > 0 && !is.na(folks) && "User" %in% fields) {
+  if (length(folks) > 0) {
     t <- t %>% filter(User %in% folks)
   }
-  if (length(projects) > 0 && !is.na(projects) && "Project.Code" %in% fields) {
+  if (length(projects) > 0) {
     t <- t %>% filter(Project.Code %in% projects)
   }
 
   t
 }
 
+tss_by_week <- function(data) {
+  data %>% group_by(User, Project.Code, Week_start) %>%
+           summarise(week_hours = sum(Total_hours)) %>%
+           spread(Week_start, week_hours)
+}
+
 server <- function(input, output) {
 
-   results <- reactive({ tss(input$fields,
+   results <- reactive({ tss(c(input$fields, fields_default),
                              input$folks,
                              input$projects,
                              input$report_date[1],
                              input$report_date[2]) })
 
    output$total_hours <- renderText({ sum(results()$Total_hours) })
-
-   output$tss_table   <- renderDataTable({ results() },
-                                         options = list(pageLength = 100)
-                                        )
+   output$tss_table   <- renderDataTable({ results() }, options = list(pageLength = 100))
+   output$tss_by_week <- renderDataTable({ results() %>% tss_by_week })
 }
